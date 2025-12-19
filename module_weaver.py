@@ -419,7 +419,7 @@ def run():
                         x="Time", 
                         y="score", 
                         markers=True, 
-                        color_discrete_sequence=["#FF4B4B"],
+                        color="sentiment_label",
                         labels={"score": "Chỉ số Tích cực (Positivity)", "Time": "Thời gian"}
                     )
                     fig.update_layout(height=250, margin=dict(l=20, r=20, t=10, b=20))
