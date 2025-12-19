@@ -8,61 +8,34 @@ class AI_Core:
         try:
             api_key = st.secrets["api_keys"]["gemini_api_key"]
             genai.configure(api_key=api_key)
-            
-            # Khởi tạo model mặc định (Flash cho nhanh)
-            self.model = genai.GenerativeModel('gemini-2.5-flash')
-            # Model mạnh hơn nếu cần (Pro)
-            self.model_pro = genai.GenerativeModel('gemini-2.5-pro')
-            
-        except Exception as e:
-            st.error(f"Lỗi khởi tạo AI: {e}")
-            self.model = None
+            self.flash = genai.GenerativeModel('gemini-2.5-flash')
+            self.pro = genai.GenerativeModel('gemini-2.5-pro')
+        except:
+            st.error("Lỗi API Key AI.")
 
     def generate(self, prompt, model_type="flash", system_instruction=None):
-        """Hàm gọi AI duy nhất"""
-        if not self.model: return "Lỗi: Chưa cấu hình API Key."
-
-        # 1. Chọn Model
-        target_model = self.model_pro if model_type == "pro" else self.model
+        model = self.pro if model_type == "pro" else self.flash
         
-        # 2. Cấu hình an toàn (Tắt kiểm duyệt để dịch thoải mái)
-        safety = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ]
-
-        # 3. Ghép System Instruction vào Prompt (Cách an toàn nhất cho mọi version)
-        full_prompt = prompt
+        # Ghép "Tư duy" (System Instruction) vào Prompt
+        final_prompt = prompt
         if system_instruction:
-            full_prompt = f"SYSTEM INSTRUCTION: {system_instruction}\n\nUSER REQUEST: {prompt}"
+            final_prompt = f"HƯỚNG DẪN HỆ THỐNG (SYSTEM INSTRUCTION):\n{system_instruction}\n\nYÊU CẦU NGƯỜI DÙNG:\n{prompt}"
 
-        # 4. Cơ chế Retry (Lì đòn)
-        wait_times = [2, 5, 10, 20] # Giây chờ
-        
-        for i, wait in enumerate(wait_times):
+        # Cơ chế Retry (Lì đòn)
+        for wait in [2, 5, 10, 20]:
             try:
-                response = target_model.generate_content(full_prompt, safety_settings=safety)
-                return response.text
+                res = model.generate_content(final_prompt)
+                return res.text
             except ResourceExhausted:
-                if i == len(wait_times) - 1:
-                    return "⚠️ Server quá tải. Vui lòng thử lại sau 1 phút."
-                time.sleep(wait) # Chờ rồi thử lại
+                time.sleep(wait)
             except Exception as e:
-                return f"Lỗi AI: {str(e)}"
-        
-        return None
+                return f"Lỗi AI: {e}"
+        return "Server quá tải. Thử lại sau."
 
-    # Cache data 1 tiếng cho các tác vụ phân tích tĩnh (Sách/Luật)
     @st.cache_data(ttl=3600)
-    def analyze_static(_self, text, task_description):
-        """Hàm dùng riêng cho RAG (Phân tích tài liệu) để tiết kiệm quota"""
-        prompt = f"{task_description}:\n\n{text[:50000]}" # Giới hạn 50k ký tự
-        # Gọi lại hàm generate nội bộ (cần workaround vì cache không nhận self)
-        # Cách đơn giản nhất cho cache: Khởi tạo lại model nhẹ trong này
+    def analyze_static(_self, text, instruction):
+        """Dùng cho RAG (Sách/Luật)"""
         try:
-            m = genai.GenerativeModel('gemini-1.5-flash')
-            return m.generate_content(prompt).text
-        except:
-            return "Lỗi phân tích static."
+            m = genai.GenerativeModel('gemini-2.5-flash')
+            return m.generate_content(f"{instruction}\n\n{text[:50000]}").text
+        except: return "Lỗi phân tích."
