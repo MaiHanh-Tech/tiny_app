@@ -27,3 +27,16 @@ DEBATE_PERSONAS = {
     "🔥 Nietzsche": "Triết gia Sinh mệnh. Phá vỡ quy tắc, cổ vũ cho Ý chí quyền lực.",
     "🙏 Phật Tổ": "Góc nhìn Vô ngã, Duyên khởi, Vô thường. Giúp giải cấu trúc sự chấp trước."
 }
+
+# 3. PROMPT PHÂN TÍCH SÁCH (ĐÃ BỔ SUNG - Fix lỗi import)
+BOOK_ANALYSIS_PROMPT = """
+Đóng vai một chuyên gia nghiên cứu hàng đầu. Hãy phân tích tài liệu được cung cấp dưới đây.
+
+YÊU CẦU ĐẦU RA:
+1. **Tóm tắt cốt lõi (Executive Summary):** Tóm tắt nội dung trong 3-5 câu súc tích.
+2. **5 Điểm sáng tạo nhất (Key Insights):** Trích xuất những ý tưởng đột phá hoặc bài học quan trọng nhất.
+3. **Phản biện/Góc nhìn đa chiều:** Chỉ ra những điểm hạn chế, lỗ hổng logic hoặc góc nhìn khác về vấn đề này.
+4. **Kết nối tri thức:** Liên hệ nội dung này với các kiến thức khoa học, triết học hoặc thực tế khác.
+
+Vui lòng trình bày rõ ràng, sử dụng Markdown (Bold, Bullet points).
+"""
