@@ -35,9 +35,9 @@ with st.sidebar:
     
     # Menu chọn App
     app_choice = st.radio("Chọn công việc:", [
-        "💰 1. CFO Controller (Tài chính)", 
+        "💰 1. Cognitive Weaver (Sách & Graph)", 
         "🌏 2. AI Translator (Dịch thuật)",
-        "🧠 3. Cognitive Weaver (Sách & Graph)"
+        "🧠 3. CFO Controller (Tài chính)"
     ])
     
     st.divider()
@@ -47,17 +47,18 @@ with st.sidebar:
 
 # 5. ĐIỀU HƯỚNG (GỌI CÁC FILE CON)
 try:
-    if app_choice == "💰 1. CFO Controller (Tài chính)":
-        import module_cfo
-        module_cfo.run() 
+    if app_choice == "💰 1. Cognitive Weaver (Sách & Graph)":
+        import module_weaver
+        module_weaver.run()
+         
         
     elif app_choice == "🌏 2. AI Translator (Dịch thuật)":
         import module_translator
         module_translator.run()
         
-    elif app_choice == "🧠 3. Cognitive Weaver (Sách & Graph)":
-        import module_weaver
-        module_weaver.run()
+    elif app_choice == "🧠 3. CFO Controller (Tài chính)":
+        import module_cfo
+        module_cfo.run()
         
 except ImportError as e:
     st.error(f"⚠️ Lỗi: Không tìm thấy file module tương ứng!\nChi tiết: {e}")
