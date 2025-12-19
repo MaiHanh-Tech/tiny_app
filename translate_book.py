@@ -1,4 +1,3 @@
-
 import pypinyin
 import re
 import os
