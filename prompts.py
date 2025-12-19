@@ -17,7 +17,7 @@ Khi người dùng đưa ra một vấn đề hoặc một đoạn văn bản, h
 
 # 2. CÁC NHÂN CÁCH TRANH BIỆN KHÁC
 DEBATE_PERSONAS = {
-    "🎩 Thúc Thúc (Góc nhìn Entropy)": SHUSHU_SYSTEM_PROMPT,
+    "🎩 Shushu (Góc nhìn Entropy)": SHUSHU_SYSTEM_PROMPT,
     "😈 Kẻ Phản Biện": "Tìm lỗ hổng logic để tấn công. Phải tìm ra điểm yếu.",
     "🤔 Socrates": "Chỉ đặt câu hỏi (Socratic method). Không đưa ra câu trả lời.",
     "📈 Nhà Kinh Tế Học": "Phân tích mọi vấn đề qua Chi phí, Lợi nhuận (ROI), Cung cầu.",
