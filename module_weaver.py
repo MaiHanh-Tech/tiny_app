@@ -391,12 +391,90 @@ def run():
                     st.audio(path)
                     st.success("OK")
 
-    # === TAB 5: NHẬT KÝ ===
+    # === TAB 5: NHẬT KÝ & TƯ DUY BAYES ===
     with tab5:
-        st.subheader(T("t5_header"))
-        if st.button(T("t5_refresh"), key="w_t5_btn"):
-            data = tai_lich_su()
-            if data:
-                st.dataframe(pd.DataFrame(data))
-            else:
-                st.info(T("t5_empty"))
+        st.subheader("⏳ Nhật Ký & Phản Chiếu Tư Duy")
+        
+        col_btn1, col_btn2 = st.columns([1, 4])
+        with col_btn1:
+            if st.button("🔄 Tải lại", key="w_t5_refresh"):
+                st.session_state.history_cloud = tai_lich_su()
+                st.rerun()
+        
+        # Lấy dữ liệu
+        data = st.session_state.get("history_cloud", tai_lich_su())
+        
+        if data:
+            df_h = pd.DataFrame(data)
+            
+            # --- PHẦN 1: KHÔI PHỤC BIỂU ĐỒ CẢM XÚC (SENTIMENT CHART) ---
+            if "SentimentScore" in df_h.columns:
+                try:
+                    # Chuyển đổi sang số, xử lý lỗi nếu có dòng trống
+                    df_h["score"] = pd.to_numeric(df_h["SentimentScore"], errors='coerce').fillna(0)
+                    
+                    st.caption("📉 Biểu đồ dao động trạng thái cảm xúc/tư duy qua thời gian:")
+                    fig = px.line(
+                        df_h, 
+                        x="Time", 
+                        y="score", 
+                        markers=True, 
+                        color_discrete_sequence=["#FF4B4B"],
+                        labels={"score": "Chỉ số Tích cực (Positivity)", "Time": "Thời gian"}
+                    )
+                    fig.update_layout(height=250, margin=dict(l=20, r=20, t=10, b=20))
+                    st.plotly_chart(fig, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"Không vẽ được biểu đồ: {e}")
+
+            # --- PHẦN 2: TƯ DUY BAYES (THE JAYNESIAN ANALYZER) - MỚI ---
+            with st.expander("🔮 Phân tích Tư duy theo xác suất Bayes (E.T. Jaynes)", expanded=False):
+                st.info("AI sẽ coi Lịch sử hoạt động của chị là 'Dữ liệu quan sát' (Evidence) để suy luận ra 'Hàm mục tiêu' (Objective Function) và sự dịch chuyển niềm tin của chị.")
+                
+                if st.button("🧠 Chạy Mô hình Bayes ngay"):
+                    with st.spinner("Đang tính toán xác suất hậu nghiệm (Posterior)..."):
+                        # Lấy 10 hoạt động gần nhất làm dữ liệu mẫu
+                        recent_logs = df_h.tail(10).to_dict(orient="records")
+                        logs_text = json.dumps(recent_logs, ensure_ascii=False)
+                        
+                        bayes_prompt = f"""
+                        Đóng vai một nhà khoa học tư duy theo trường phái E.T. Jaynes (sách 'Probability Theory: The Logic of Science').
+                        
+                        DỮ LIỆU QUAN SÁT (EVIDENCE):
+                        Đây là nhật ký hoạt động của tôi:
+                        {logs_text}
+                        
+                        NHIỆM VỤ:
+                        Hãy phân tích chuỗi hành động này như một bài toán suy luận Bayes.
+                        1. **Xác định Priors (Niềm tin tiên nghiệm):** Dựa trên các hành động đầu, tôi đang quan tâm/tin tưởng điều gì?
+                        2. **Cập nhật Likelihood (Khả năng):** Các hành động tiếp theo củng cố hay làm yếu đi niềm tin đó?
+                        3. **Kết luận Posterior (Hậu nghiệm):** Trạng thái tư duy hiện tại của tôi đang hội tụ về đâu? Có mâu thuẫn (Inconsistency) nào trong logic hành động không?
+                        
+                        Trả lời ngắn gọn, sâu sắc, dùng thuật ngữ xác suất nhưng dễ hiểu.
+                        """
+                        
+                        # Gọi AI Core (Dùng Pro để suy luận sâu)
+                        analysis = ai.generate(bayes_prompt, model_type="pro")
+                        st.markdown(analysis)
+
+            # --- PHẦN 3: DANH SÁCH CHI TIẾT ---
+            st.divider()
+            st.write("📜 **Chi tiết Nhật ký:**")
+            
+            # Đảo ngược để xem mới nhất trước
+            for index, item in df_h.iloc[::-1].iterrows():
+                time_str = str(item.get('Time', ''))
+                type_str = str(item.get('Type', ''))
+                title_str = str(item.get('Title', ''))
+                content_str = str(item.get('Content', ''))
+                
+                icon = "📝"
+                if "Tranh Biện" in type_str: icon = "🗣️"
+                elif "Dịch" in type_str: icon = "✍️"
+                elif "Audio" in type_str: icon = "🎙️"
+                
+                with st.expander(f"{icon} {time_str} | {type_str} | {title_str}"):
+                    st.markdown(content_str)
+                    st.caption(f"Sentiment: {item.get('SentimentLabel', 'Neutral')} ({item.get('SentimentScore', 0)})")
+        else:
+            st.info(T("t5_empty"))
