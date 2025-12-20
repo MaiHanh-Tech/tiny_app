@@ -369,8 +369,14 @@ def run():
                             time.sleep(10) # Nghỉ để tránh Quota
                 
                 # --- ĐÃ BỔ SUNG: LƯU LỊCH SỬ ---
-                luu_lich_su("Hội Đồng Tranh Biện", topic, "\n\n".join(full_transcript))
-                st.success("Kết thúc tranh luận! Đã lưu vào Nhật ký.")
+                full_log = "\n\n".join(st.session_state.battle_logs)
+                        luu_lich_su_vinh_vien("Hội Đồng Tranh Biện", topic, full_log)
+                        st.toast("💾 Đã lưu biên bản cuộc họp vào Nhật Ký!", icon="✅")
+                        
+                # Hiển thị kết quả trận đấu
+                for log in st.session_state.battle_logs:
+                    st.markdown(log)
+                    st.markdown("---")
 
     # === TAB 4: PHÒNG THU AI ===
     with tab4:
