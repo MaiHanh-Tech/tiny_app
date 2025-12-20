@@ -370,8 +370,8 @@ def run():
                 
                 # --- ĐÃ BỔ SUNG: LƯU LỊCH SỬ ---
                 full_log = "\n\n".join(st.session_state.battle_logs)
-                        luu_lich_su_vinh_vien("Hội Đồng Tranh Biện", topic, full_log)
-                        st.toast("💾 Đã lưu biên bản cuộc họp vào Nhật Ký!", icon="✅")
+                luu_lich_su_vinh_vien("Hội Đồng Tranh Biện", topic, full_log)
+                st.toast("💾 Đã lưu biên bản cuộc họp vào Nhật Ký!", icon="✅")
                         
                 # Hiển thị kết quả trận đấu
                 for log in st.session_state.battle_logs:
