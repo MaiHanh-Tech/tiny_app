@@ -331,11 +331,11 @@ def run():
                 
                 # Prompt có ngữ cảnh đầy đủ
                 full_prompt = f"""
-LỊCH SỬ HỘI THOẠI:
-{context_text}
+                LỊCH SỬ HỘI THOẠI:
+                {context_text}
 
-NHIỆM VỤ: Dựa vào lịch sử trên, hãy trả lời câu hỏi mới nhất của USER.
-Nếu USER hỏi "câu hỏi cũ" hoặc "vừa rồi", hãy tham chiếu đến lịch sử để trả lời.
+                NHIỆM VỤ: Dựa vào lịch sử trên, hãy trả lời câu hỏi mới nhất của USER.
+                Nếu USER hỏi "câu hỏi cũ" hoặc "vừa rồi", hãy tham chiếu đến lịch sử để trả lời.
                 """
                 
                 with st.chat_message("assistant"):
@@ -360,9 +360,9 @@ Nếu USER hỏi "câu hỏi cũ" hoặc "vừa rồi", hãy tham chiếu đến
                             
                             # ✅ FIX 2: LƯU CẢ CÂU HỎI VÀ TRẢ LỜI
                             full_content = f"""
-👤 USER: {prompt}
+                            👤 USER: {prompt}
 
-🤖 {persona}: {res}
+                            🤖 {persona}: {res}
                             """
                             
                             luu_lich_su(
@@ -453,25 +453,25 @@ Nếu USER hỏi "câu hỏi cũ" hoặc "vừa rồi", hãy tham chiếu đến
                             # Xây dựng prompt
                             if round_num == 1:
                                 p_prompt = f"""
-CHỦ ĐỀ TRANH LUẬN: {topic}
+                                CHỦ ĐỀ TRANH LUẬN: {topic}
 
-NHIỆM VỤ (Vòng 1 - Khai mạc): 
-Bạn là {p_name}. Hãy đưa ra quan điểm mở đầu của mình về chủ đề này.
-Nêu rõ lập trường và 2-3 lý lẽ chính (dưới 100 từ).
+                                NHIỆM VỤ (Vòng 1 - Khai mạc): 
+                                Bạn là {p_name}. Hãy đưa ra quan điểm mở đầu của mình về chủ đề này.
+                                Nêu rõ lập trường và 2-3 lý lẽ chính (dưới 100 từ).
                                 """
                             else:
                                 p_prompt = f"""
-CHỦ ĐỀ: {topic}
+                                CHỦ ĐỀ: {topic}
 
-TÌNH HUỐNG HIỆN TẠI:
-{context_str}
+                                TÌNH HUỐNG HIỆN TẠI:
+                                {context_str}
 
-NHIỆM VỤ (Vòng {round_num} - Phản biện):
-Bạn là {p_name}. Hãy:
-1. Chỉ ra điểm yếu trong lập luận của đối thủ
-2. Củng cố quan điểm của mình
-3. Đưa ra thêm 1 ví dụ minh họa
-(Dưới 100 từ, súc tích)
+                                NHIỆM VỤ (Vòng {round_num} - Phản biện):
+                                Bạn là {p_name}. Hãy:
+                                1. Chỉ ra điểm yếu trong lập luận của đối thủ
+                                2. Củng cố quan điểm của mình
+                                3. Đưa ra thêm 1 ví dụ minh họa
+                                (Dưới 100 từ, súc tích)
                                 """
                             
                             # Gọi AI
