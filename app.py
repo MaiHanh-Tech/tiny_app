@@ -5,7 +5,8 @@ pass_can_tao = st.sidebar.text_input("Nhập mật khẩu chị muốn đặt ch
 if pass_can_tao:
     ma_hash = hashlib.sha256(pass_can_tao.encode()).hexdigest()
     st.sidebar.code(f'admin_password_hash = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92"', language="toml")
-    st.sidebar.info("👆 Copy dòng trên dán vào secrets.toml nhé!")import streamlit as st
+    st.sidebar.info("👆 Copy dòng trên dán vào secrets.toml nhé!")
+    import streamlit as st
 
 # 1. CẤU HÌNH TRANG (Bắt buộc dòng đầu tiên)
 st.set_page_config(page_title="Super AI System", layout="wide", page_icon="🏢")
