@@ -9,16 +9,36 @@ from bs4 import BeautifulSoup
 from streamlit_agraph import agraph, Node, Edge, Config
 import plotly.express as px
 import time
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import json
 import re
+
+# ✅ [SỬA] THAY THẾ GSPREAD BẰNG SUPABASE
+try:
+    from supabase import create_client, Client
+except ImportError:
+    st.error("⚠️ Thiếu thư viện supabase. Hãy thêm 'supabase' vào requirements.txt")
 
 # --- IMPORT CÁC META-BLOCKS ---
 from ai_core import AI_Core
 from voice_block import Voice_Engine
 from prompts import DEBATE_PERSONAS, BOOK_ANALYSIS_PROMPT
+
+# ==========================================
+# ✅ [SỬA] CẤU HÌNH KẾT NỐI SUPABASE
+# ==========================================
+has_db = False
+supabase = None
+
+try:
+    # Lấy key từ secrets.toml
+    SUPA_URL = st.secrets["supabase"]["url"]
+    SUPA_KEY = st.secrets["supabase"]["key"]
+    supabase: Client = create_client(SUPA_URL, SUPA_KEY)
+    has_db = True
+except Exception as e:
+    # Nếu chưa cấu hình thì thôi, chỉ tắt tính năng log
+    pass
 
 # ==========================================
 # 🌍 BỘ TỪ ĐIỂN ĐA NGÔN NGỮ
@@ -137,7 +157,7 @@ def load_models():
         model.max_seq_length = 128  # Giảm từ 256 (default)
         return model
     except Exception as e:
-        st.error(f"Không load được model: {e}")
+        # st.error(f"Không load được model: {e}")
         return None
 
 # THÊM HÀM KIỂM TRA
@@ -164,32 +184,64 @@ def doc_file(uploaded_file):
     except: return ""
     return ""
 
-def connect_gsheet():
-    try:
-        if "gcp_service_account" not in st.secrets: return None
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        if "private_key" in creds_dict:
-            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        client = gspread.authorize(creds)
-        return client.open("AI_History_Logs").sheet1
-    except: return None
+# ==========================================
+# ✅ [SỬA] CÁC HÀM TƯƠNG TÁC DB (THAY GSPREAD)
+# ==========================================
 
 def luu_lich_su(loai, tieu_de, noi_dung):
-    thoi_gian = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    """Lưu log vào Supabase"""
+    if not has_db: return
+    
     user = st.session_state.get("current_user", "Unknown")
+    
+    # Map dữ liệu vào đúng tên cột trong Supabase (chữ thường)
+    data = {
+        "type": loai,
+        "title": tieu_de,
+        "content": noi_dung,
+        "user_name": user,
+        "sentiment_score": 0.0,
+        "sentiment_label": "Neutral"
+    }
+    
     try:
-        sheet = connect_gsheet()
-        if sheet: sheet.append_row([thoi_gian, loai, tieu_de, noi_dung, user, 0.0, "Neutral"])
-    except: pass
+        # insert vào bảng history_logs
+        supabase.table("history_logs").insert(data).execute()
+    except Exception as e:
+        print(f"Lỗi lưu log: {e}")
 
 def tai_lich_su():
+    """Tải log từ Supabase và chuyển về format cũ cho Frontend"""
+    if not has_db: return []
+    
     try:
-        sheet = connect_gsheet()
-        if sheet: return sheet.get_all_records()
-    except: return []
-    return []
+        # Lấy 50 dòng mới nhất
+        response = supabase.table("history_logs").select("*").order("created_at", desc=True).limit(50).execute()
+        raw_data = response.data
+        
+        # ✅ QUAN TRỌNG: Map lại tên cột để khớp với code Frontend cũ của chị
+        # Supabase trả về: created_at, type, title...
+        # Chị cần: Time, Type, Title...
+        formatted_data = []
+        for item in raw_data:
+            # Xử lý ngày tháng: "2023-10-10T10:00:00" -> "2023-10-10 10:00:00"
+            raw_time = item.get("created_at", "")
+            clean_time = raw_time.replace("T", " ")[:19]
+
+            formatted_data.append({
+                "Time": clean_time,            # Map created_at -> Time
+                "Type": item.get("type"),      # Map type -> Type
+                "Title": item.get("title"),    # Map title -> Title
+                "Content": item.get("content"),# Map content -> Content
+                "User": item.get("user_name"), # Map user_name -> User
+                "SentimentScore": item.get("sentiment_score", 0.0),
+                "SentimentLabel": item.get("sentiment_label", "Neutral")
+            })
+            
+        return formatted_data
+    except Exception as e:
+        # st.error(f"Lỗi tải lịch sử từ DB: {e}")
+        return []
 
 # --- HÀM CHÍNH: RUN() ---
 def run():
@@ -238,13 +290,13 @@ def run():
             
             vec = load_models()
             db, df = None, None
-            has_db = False
+            has_db_rag = False
             
             if file_excel:
                 try:
                     df = pd.read_excel(file_excel).dropna(subset=["Tên sách"])
                     db = vec.encode([f"{r['Tên sách']} {str(r.get('CẢM NHẬN',''))}" for _, r in df.iterrows()])
-                    has_db = True
+                    has_db_rag = True
                     st.success(T("t1_connect_ok").format(n=len(df)))
                 except: st.error("Lỗi đọc Excel.")
 
@@ -257,7 +309,7 @@ def run():
                 # Logic xử lý file cũ
                 text = doc_file(f)
                 link = ""
-                if has_db:
+                if has_db_rag and vec:
                     q = vec.encode([text[:2000]])
                     sc = cosine_similarity(q, db)[0]
                     # Lưu ý: Đổi tên biến idx thành idx_sim để tránh trùng
@@ -600,7 +652,7 @@ def run():
         if data:
             df_h = pd.DataFrame(data)
             
-            # --- BIỂU ĐỒ CẢM XÚC ---
+            # --- BIỂU ĐỒ CẢM XÚC (Dùng tên cột cũ: Time, SentimentScore) ---
             if "SentimentScore" in df_h.columns:
                 try:
                     df_h["score"] = pd.to_numeric(df_h["SentimentScore"], errors='coerce').fillna(0)
@@ -617,9 +669,10 @@ def run():
                     fig.update_layout(height=250, margin=dict(l=20, r=20, t=10, b=20))
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
-                    st.warning(f"Không vẽ được biểu đồ: {e}")
+                    # st.warning(f"Không vẽ được biểu đồ: {e}")
+                    pass
 
-            # --- PHẦN 2: TƯ DUY BAYES (THE JAYNESIAN ANALYZER) ---
+            # --- PHẦN 2: TƯ DUY BAYES ---
             with st.expander("🔮 Phân tích Tư duy theo xác suất Bayes (E.T. Jaynes)", expanded=False):
                 st.info("AI sẽ coi Lịch sử hoạt động của chị là 'Dữ liệu quan sát' (Evidence) để suy luận ra 'Hàm mục tiêu' (Objective Function) và sự dịch chuyển niềm tin của chị.")
                 
@@ -655,6 +708,7 @@ def run():
             
             # Đảo ngược để xem mới nhất trước
             for index, item in df_h.iloc[::-1].iterrows():
+                # Lấy dữ liệu theo tên cột cũ
                 time_str = str(item.get('Time', ''))
                 type_str = str(item.get('Type', ''))
                 title_str = str(item.get('Title', ''))
