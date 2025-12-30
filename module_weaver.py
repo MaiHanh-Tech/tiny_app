@@ -206,7 +206,7 @@ def luu_lich_su(loai, tieu_de, noi_dung):
     
     try:
         # insert vào bảng history_logs
-        supabase.table("history_logs").insert(data).execute()
+        supabase.table("History_Logs").insert(data).execute()
     except Exception as e:
         print(f"Lỗi lưu log: {e}")
 
@@ -216,7 +216,7 @@ def tai_lich_su():
     
     try:
         # Lấy 50 dòng mới nhất
-        response = supabase.table("history_logs").select("*").order("created_at", desc=True).limit(50).execute()
+        response = supabase.table("History_Logs").select("*").order("created_at", desc=True).limit(50).execute()
         raw_data = response.data
         
         # ✅ QUAN TRỌNG: Map lại tên cột để khớp với code Frontend cũ của chị
@@ -554,7 +554,7 @@ def run():
 
                                     NHIỆM VỤ (Vòng 1 - Khai mạc): 
                                     Bạn là {p_name}. Hãy đưa ra quan điểm mở đầu của mình về chủ đề này.
-                                    Nêu rõ lập trường và 2-3 lý lẽ chính (dưới 100 từ).
+                                    Nêu rõ lập trường và 2-3 lý lẽ chính (dưới 200 từ).
                                     """
                                 else:
                                     p_prompt = f"""
@@ -568,7 +568,7 @@ def run():
                                     1. Chỉ ra điểm yếu trong lập luận của đối thủ
                                     2. Củng cố quan điểm của mình
                                     3. Đưa ra thêm 1 ví dụ minh họa
-                                    (Dưới 100 từ, súc tích)
+                                    (Dưới 200 từ, súc tích)
                                     """
                                 
                                 try:
