@@ -57,16 +57,32 @@ if 'user_logged_in' not in st.session_state:
 
 if not st.session_state.user_logged_in:
     st.title("🔐 Đăng Nhập Hệ Thống")
+    
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        pwd = st.text_input("Nhập mật khẩu:", type="password")
+        # ✅ KHÔNG HIỂN THỊ PASSWORD!
+        pwd = st.text_input(
+            "Nhập mật khẩu:", 
+            type="password",
+            placeholder="Nhập mật khẩu của bạn",
+            help="Liên hệ admin nếu quên mật khẩu"
+        )
+        
         if st.button("Truy cập", use_container_width=True):
-            if auth.login(pwd): # Gọi hàm login từ Auth Block
-                st.success("Thành công!")
+            if auth.login(pwd):
+                st.success("✅ Đăng nhập thành công!")
                 st.rerun()
             else:
-                st.error("Sai mật khẩu!")
-    st.stop() # Dừng lại, không chạy phần dưới nếu chưa login
+                st.error("❌ Sai mật khẩu!")
+                
+                # Hiển thị số lần thử còn lại
+                attempts = st.session_state.get('login_attempts', {}).get('global', [])
+                remaining = 5 - len(attempts)
+                if remaining > 0:
+                    st.warning(f"⚠️ Còn {remaining} lần thử")
+    
+    st.stop()  # Dừng lại, không chạy phần dưới nếu chưa login
+
 
 # 4. GIAO DIỆN CHÍNH (SAU KHI LOGIN)
 with st.sidebar:
