@@ -13,8 +13,11 @@ from datetime import datetime
 import json
 import re
 
-# ✅ THAY GOOGLE SHEETS BẰNG SUPABASE
-from supabase import create_client, Client
+# ✅ THAY ĐỔI 1: IMPORT SUPABASE (Bỏ gspread, oauth2client)
+try:
+    from supabase import create_client, Client
+except ImportError:
+    st.error("⚠️ Thiếu thư viện supabase. Hãy thêm 'supabase' vào requirements.txt")
 
 # --- IMPORT CÁC META-BLOCKS ---
 from ai_core import AI_Core
@@ -22,7 +25,23 @@ from voice_block import Voice_Engine
 from prompts import DEBATE_PERSONAS, BOOK_ANALYSIS_PROMPT
 
 # ==========================================
-# 🌍 BỘ TỪ ĐIỂN ĐA NGÔN NGỮ
+# 🌍 KẾT NỐI SUPABASE (Thay thế Google Sheet)
+# ==========================================
+has_db = False
+supabase = None
+
+try:
+    # Lấy thông tin từ secrets.toml
+    SUPA_URL = st.secrets["supabase"]["url"]
+    SUPA_KEY = st.secrets["supabase"]["key"]
+    supabase: Client = create_client(SUPA_URL, SUPA_KEY)
+    has_db = True
+except Exception:
+    # Nếu chưa cấu hình thì thôi, không báo lỗi đỏ
+    has_db = False
+
+# ==========================================
+# 🌍 BỘ TỪ ĐIỂN ĐA NGÔN NGỮ (GIỮ NGUYÊN)
 # ==========================================
 TRANS = {
     "vi": {
@@ -125,97 +144,6 @@ def T(key):
     lang = st.session_state.get('weaver_lang', 'vi')
     return TRANS.get(lang, TRANS['vi']).get(key, key)
 
-# ==========================================
-# 🔄 THAY ĐỔI CHÍNH: KẾT NỐI SUPABASE
-# ==========================================
-
-@st.cache_resource
-def get_supabase_client() -> Client:
-    """Kết nối Supabase (chỉ chạy 1 lần)"""
-    try:
-        url = st.secrets["supabase"]["url"]
-        key = st.secrets["supabase"]["key"]
-        return create_client(url, key)
-    except Exception as e:
-        st.error(f"❌ Không kết nối được Supabase: {e}")
-        return None
-
-def luu_lich_su(loai: str, tieu_de: str, noi_dung: str):
-    """
-    Lưu lịch sử vào Supabase
-    Mapping cột:
-    - Time → created_at (tự động)
-    - Type → type
-    - Title → title
-    - Content → content
-    - User → user_name
-    - SentimentScore → sentiment_score
-    - SentimentLabel → sentiment_label
-    """
-    try:
-        supabase = get_supabase_client()
-        if not supabase:
-            return
-        
-        user = st.session_state.get("current_user", "Unknown")
-        
-        # ✅ Dữ liệu đúng cấu trúc bảng Supabase
-        data = {
-            "type": loai,
-            "title": tieu_de,
-            "content": noi_dung,
-            "user_name": user,
-            "sentiment_score": 0.0,  # Placeholder (có thể tích hợp sentiment analysis)
-            "sentiment_label": "Neutral"
-        }
-        
-        response = supabase.table("History_Logs").insert(data).execute()
-        
-        # Kiểm tra lỗi
-        if hasattr(response, 'error') and response.error:
-            st.warning(f"⚠️ Lỗi lưu lịch sử: {response.error}")
-            
-    except Exception as e:
-        st.warning(f"⚠️ Không lưu được lịch sử: {e}")
-
-def tai_lich_su():
-    """
-    Tải lịch sử từ Supabase
-    Trả về danh sách dict với các key giống Google Sheets cũ
-    để giữ nguyên logic hiển thị
-    """
-    try:
-        supabase = get_supabase_client()
-        if not supabase:
-            return []
-        
-        # ✅ Lấy dữ liệu, sắp xếp theo thời gian mới nhất
-        response = supabase.table("History_Logs")\
-            .select("*")\
-            .order("created_at", desc=True)\
-            .execute()
-        
-        if hasattr(response, 'data') and response.data:
-            # ✅ Chuyển đổi tên cột để tương thích với code cũ
-            return [
-                {
-                    "Time": item.get("created_at", ""),
-                    "Type": item.get("type", ""),
-                    "Title": item.get("title", ""),
-                    "Content": item.get("content", ""),
-                    "User": item.get("user_name", ""),
-                    "SentimentScore": item.get("sentiment_score", 0.0),
-                    "SentimentLabel": item.get("sentiment_label", "Neutral")
-                }
-                for item in response.data
-            ]
-        
-        return []
-        
-    except Exception as e:
-        st.error(f"❌ Lỗi tải lịch sử: {e}")
-        return []
-
 # --- CÁC HÀM PHỤ TRỢ (GIỮ NGUYÊN) ---
 @st.cache_resource
 def load_models():
@@ -223,16 +151,14 @@ def load_models():
     try:
         model = SentenceTransformer(
             "paraphrase-multilingual-MiniLM-L12-v2",
-            device='cpu'
+            device='cpu'  # ← BẮT BUỘC dùng CPU trên Streamlit Cloud
         )
         model.max_seq_length = 128
         return model
     except Exception as e:
-        st.error(f"Không load được model: {e}")
         return None
 
 def check_model_available():
-    """Kiểm tra model có sẵn không trước khi dùng"""
     model = load_models()
     if model is None:
         st.warning("⚠️ Chức năng Knowledge Graph tạm thời không khả dụng (thiếu RAM)")
@@ -254,7 +180,60 @@ def doc_file(uploaded_file):
     except: return ""
     return ""
 
-# --- HÀM CHÍNH: RUN() (GIỮ NGUYÊN LOGIC, CHỈ THAY GỌI HÀM LƯU/TẢI) ---
+# ✅ THAY ĐỔI 2: HÀM LƯU/TẢI LOG DÙNG SUPABASE
+# Hàm này tự động map dữ liệu Supabase về format cũ (Time, Title...) để giao diện không bị lỗi
+
+def luu_lich_su(loai, tieu_de, noi_dung):
+    """Lưu log vào Supabase (Bảng history_logs)"""
+    if not has_db: return
+    
+    user = st.session_state.get("current_user", "Unknown")
+    
+    # Data chuẩn theo cột trong Supabase (chữ thường)
+    data = {
+        "type": loai,
+        "title": tieu_de,
+        "content": noi_dung,
+        "user_name": user,
+        "sentiment_score": 0.0,
+        "sentiment_label": "Neutral"
+    }
+    
+    try:
+        supabase.table("history_logs").insert(data).execute()
+    except Exception as e:
+        print(f"Lỗi lưu log: {e}")
+
+def tai_lich_su():
+    """Tải log từ Supabase và đổi tên cột cho khớp code cũ"""
+    if not has_db: return []
+    
+    try:
+        # Lấy 50 dòng mới nhất
+        response = supabase.table("history_logs").select("*").order("created_at", desc=True).limit(50).execute()
+        raw_data = response.data
+        
+        # ✅ CHUYỂN ĐỔI FORMAT (Mapping)
+        formatted_data = []
+        for item in raw_data:
+            # Xử lý thời gian cho đẹp (bỏ chữ T và phần mili giây)
+            t = item.get("created_at", "").replace("T", " ")[:19]
+            
+            formatted_data.append({
+                "Time": t,                          # Map created_at -> Time
+                "Type": item.get("type"),           # Map type -> Type
+                "Title": item.get("title"),         # Map title -> Title
+                "Content": item.get("content"),     # Map content -> Content
+                "User": item.get("user_name"),      # Map user_name -> User
+                "SentimentScore": item.get("sentiment_score", 0.0),
+                "SentimentLabel": item.get("sentiment_label", "Neutral")
+            })
+            
+        return formatted_data
+    except Exception as e:
+        return []
+
+# --- HÀM CHÍNH: RUN() (GIỮ NGUYÊN) ---
 def run():
     # 1. Khởi tạo các Block
     ai = AI_Core()
@@ -298,13 +277,13 @@ def run():
             
             vec = load_models()
             db, df = None, None
-            has_db = False
+            has_db_rag = False
             
             if file_excel:
                 try:
                     df = pd.read_excel(file_excel).dropna(subset=["Tên sách"])
                     db = vec.encode([f"{r['Tên sách']} {str(r.get('CẢM NHẬN',''))}" for _, r in df.iterrows()])
-                    has_db = True
+                    has_db_rag = True
                     st.success(T("t1_connect_ok").format(n=len(df)))
                 except: st.error("Lỗi đọc Excel.")
 
@@ -314,7 +293,7 @@ def run():
                 
                 text = doc_file(f)
                 link = ""
-                if has_db:
+                if has_db_rag:
                     q = vec.encode([text[:2000]])
                     sc = cosine_similarity(q, db)[0]
                     idx_sim = np.argsort(sc)[::-1][:3]
@@ -328,8 +307,6 @@ def run():
                     st.markdown(f"### 📄 {f.name}")
                     st.markdown(res)
                     st.markdown("---")
-                    
-                    # ✅ GỌI HÀM MỚI
                     luu_lich_su("Phân Tích Sách", f.name, res[:200])
                 
                 progress_bar.progress((file_idx+1) / total_files)
@@ -373,8 +350,6 @@ def run():
                 p = f"Translate to {target_lang}. Style: {style}. Text: {txt}"
                 res = ai.generate(p, model_type="pro")
                 st.markdown(res)
-                
-                # ✅ GỌI HÀM MỚI
                 luu_lich_su("Dịch Thuật", f"{target_lang}", txt[:50])
 
     # === TAB 3: ĐẤU TRƯỜNG TƯ DUY ===
@@ -387,208 +362,105 @@ def run():
 
         if mode == "👤 Solo":
             c1, c2 = st.columns([3, 1])
-            
             with c1: 
-                persona = st.selectbox(
-                    T("t3_persona_label"), 
-                    list(DEBATE_PERSONAS.keys()), 
-                    key="w_t3_solo_p"
-                )
-            
+                persona = st.selectbox(T("t3_persona_label"), list(DEBATE_PERSONAS.keys()), key="w_t3_solo_p")
             with c2: 
-                if st.button(T("t3_clear"), key="w_t3_clr"): 
-                    st.session_state.weaver_chat = []
-                    st.rerun()
+                if st.button(T("t3_clear"), key="w_t3_clr"): st.session_state.weaver_chat = []; st.rerun()
 
-            for msg in st.session_state.weaver_chat:
-                st.chat_message(msg["role"]).write(msg["content"])
+            for msg in st.session_state.weaver_chat: st.chat_message(msg["role"]).write(msg["content"])
 
             if prompt := st.chat_input(T("t3_input")):
                 st.chat_message("user").write(prompt)
-                st.session_state.weaver_chat.append({
-                    "role": "user", 
-                    "content": prompt
-                })
-                
+                st.session_state.weaver_chat.append({"role": "user", "content": prompt})
                 recent_history = st.session_state.weaver_chat[-10:]
-                context_text = "\n".join([
-                    f"{m['role'].upper()}: {m['content']}" 
-                    for m in recent_history
-                ])
-                
-                full_prompt = f"""
-                LỊCH SỬ HỘI THOẠI:
-                {context_text}
-
-                NHIỆM VỤ: Dựa vào lịch sử trên, hãy trả lời câu hỏi mới nhất của USER.
-                """
+                context_text = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in recent_history])
+                full_prompt = f"LỊCH SỬ:\n{context_text}\n\nNHIỆM VỤ: Trả lời câu hỏi mới nhất của USER."
                 
                 with st.chat_message("assistant"):
-                    sys_instruction = DEBATE_PERSONAS[persona]
-                    
-                    with st.spinner("🤔 Đang suy nghĩ..."):
-                        res = ai.generate(
-                            full_prompt, 
-                            model_type="flash", 
-                            system_instruction=sys_instruction
-                        )
-                        
+                    with st.spinner("🤔..."):
+                        res = ai.generate(full_prompt, model_type="flash", system_instruction=DEBATE_PERSONAS[persona])
                         if res:
                             st.write(res)
-                            
-                            st.session_state.weaver_chat.append({
-                                "role": "assistant", 
-                                "content": res
-                            })
-                            
-                            full_content = f"""
-                            👤 USER: {prompt}
-
-                            🤖 {persona}: {res}
-                            """
-                            
-                            # ✅ GỌI HÀM MỚI
-                            luu_lich_su(
-                                loai="Tranh Biện Solo",
-                                tieu_de=f"{persona} - {prompt[:50]}...",
-                                noi_dung=full_content.strip()
-                            )
-                        else:
-                            st.error("⚠️ AI không phản hồi. Vui lòng thử lại.")
-        
+                            st.session_state.weaver_chat.append({"role": "assistant", "content": res})
+                            luu_lich_su("Tranh Biện Solo", f"{persona} - {prompt[:50]}...", f"Q: {prompt}\nA: {res}")
+                        else: st.error("⚠️ AI Error.")
         else:
-            st.info("💡 Chọn 2-3 nhân vật để họ tự tranh luận.")
+            # Multi-Agent
+            st.info("💡 Chọn 2-3 nhân vật.")
+            participants = st.multiselect("Chọn Hội Đồng:", list(DEBATE_PERSONAS.keys()), default=[list(DEBATE_PERSONAS.keys())[0], list(DEBATE_PERSONAS.keys())[1]], max_selections=3)
+            topic = st.text_input("Chủ đề:", key="w_t3_topic")
             
-            participants = st.multiselect(
-                "Chọn Hội Đồng Tranh Biện:", 
-                list(DEBATE_PERSONAS.keys()), 
-                default=[list(DEBATE_PERSONAS.keys())[0], list(DEBATE_PERSONAS.keys())[1]],
-                max_selections=3,
-                key="w_t3_multi_p"
-            )
-            
-            topic = st.text_input(
-                "Chủ đề tranh luận:", 
-                placeholder="VD: Tiền có mua được hạnh phúc không?",
-                key="w_t3_topic"
-            )
-            
-            c_start, c_del = st.columns([1, 5])
-            
-            with c_start:
-                start_btn = st.button(
-                    "🔥 KHAI CHIẾN", 
-                    key="w_t3_start", 
-                    disabled=(len(participants) < 2 or not topic),
-                    type="primary"
-                )
-            
-            with c_del:
-                if st.button("🗑️ Xóa Bàn", key="w_t3_multi_clr"):
-                    st.session_state.weaver_chat = []
-                    st.rerun()
-
-            for msg in st.session_state.weaver_chat:
-                role = msg["role"]
-                content = msg["content"]
-                
-                if role == "system":
-                    st.info(content)
-                else:
-                    st.chat_message("assistant").write(content)
-            
-            if start_btn and topic and len(participants) >= 2:
+            if st.button("🔥 KHAI CHIẾN", disabled=(len(participants)<2 or not topic)):
                 st.session_state.weaver_chat = []
-                
                 start_msg = f"📢 **CHỦ TỌA:** Khai mạc tranh luận về: *'{topic}'*"
                 st.session_state.weaver_chat.append({"role": "system", "content": start_msg})
                 st.info(start_msg)
-                
                 full_transcript = [start_msg]
+                MAX_DEBATE_TIME = 90; start_time = time.time()
                 
-                MAX_DEBATE_TIME = 90
-                start_time = time.time()
-                
-                with st.status("🔥 Cuộc chiến đang diễn ra (tối đa 3 vòng)...") as status:
-                    try:
-                        for round_num in range(1, 4):
-                            if time.time() - start_time > MAX_DEBATE_TIME:
-                                st.warning("⏰ Đã hết thời gian tranh luận (90s). Kết thúc sớm.")
-                                break
-                            
-                            status.update(label=f"🔄 Vòng {round_num}/3 đang diễn ra...")
-                            
-                            for i, p_name in enumerate(participants):
-                                if time.time() - start_time > MAX_DEBATE_TIME:
-                                    break
-                                
-                                if len(st.session_state.weaver_chat) > 1:
-                                    recent_context = st.session_state.weaver_chat[-3:]
-                                    context_str = "\n".join([
-                                        f"- {m['content']}" 
-                                        for m in recent_context 
-                                        if m['role'] != 'system'
-                                    ])
-                                else:
-                                    context_str = topic
-                                
-                                if round_num == 1:
-                                    p_prompt = f"""
-                                    CHỦ ĐỀ TRANH LUẬN: {topic}
+                with st.status("🔥 Đang diễn ra...") as status:
+                    for round_num in range(1, 4):
+                        if time.time() - start_time > MAX_DEBATE_TIME: break
+                        status.update(label=f"🔄 Vòng {round_num}...")
+                        for p_name in participants:
+                            if time.time() - start_time > MAX_DEBATE_TIME: break
+                            context_str = topic if len(st.session_state.weaver_chat) <= 1 else "\n".join([f"- {m['content']}" for m in st.session_state.weaver_chat[-3:] if m['role'] != 'system'])
+                            p_prompt = f"CHỦ ĐỀ: {topic}\nBỐI CẢNH:\n{context_str}\n\nNHIỆM VỤ (Vòng {round_num}): Phản biện."
+                            try:
+                                res = ai.generate(p_prompt, model_type="flash", system_instruction=DEBATE_PERSONAS[p_name])
+                                if res:
+                                    fmt = f"**{p_name}:** {res}"
+                                    st.session_state.weaver_chat.append({"role": "assistant", "content": fmt})
+                                    full_transcript.append(fmt)
+                                    st.chat_message("assistant").write(fmt)
+                                    time.sleep(2)
+                            except: continue
+                    status.update(label="✅ Kết thúc!", state="complete")
+                luu_lich_su("Hội Đồng Tranh Biện", topic, "\n".join(full_transcript))
 
-                                    NHIỆM VỤ (Vòng 1 - Khai mạc): 
-                                    Bạn là {p_name}. Hãy đưa ra quan điểm mở đầu của mình về chủ đề này.
-                                    Nêu rõ lập trường và 2-3 lý lẽ chính (dưới 100 từ).
-                                    """
-                                else:
-                                    p_prompt = f"""
-                                    CHỦ ĐỀ: {topic}
+    # === TAB 4: PHÒNG THU AI ===
+    with tab4:
+        st.subheader(T("t4_header"))
+        inp_v = st.text_area("Text:", height=200, key="w_t4_input")
+        btn_v = st.button(T("t4_btn"), key="w_t4_btn")
+        if btn_v and inp_v:
+            path = voice.speak(inp_v)
+            if path: st.audio(path)
 
-                                    TÌNH HUỐNG HIỆN TẠI:
-                                    {context_str}
+    # === TAB 5: NHẬT KÝ (DATA TỪ SUPABASE) ===
+    with tab5:
+        st.subheader("⏳ Nhật Ký & Phản Chiếu Tư Duy")
+        if st.button("🔄 Tải lại", key="w_t5_refresh"):
+            st.session_state.history_cloud = tai_lich_su()
+            st.rerun()
+        
+        # Lấy dữ liệu (đã được hàm tai_lich_su chuyển đổi về format cũ)
+        data = st.session_state.get("history_cloud", tai_lich_su())
+        
+        if data:
+            df_h = pd.DataFrame(data)
+            
+            # --- BIỂU ĐỒ (Dùng tên cột cũ: Time, SentimentScore...) ---
+            if "SentimentScore" in df_h.columns:
+                try:
+                    df_h["score"] = pd.to_numeric(df_h["SentimentScore"], errors='coerce').fillna(0)
+                    fig = px.line(df_h, x="Time", y="score", markers=True, color_discrete_sequence=["#76FF03"])
+                    st.plotly_chart(fig, use_container_width=True)
+                except: pass
 
-                                    NHIỆM VỤ (Vòng {round_num} - Phản biện):
-                                    Bạn là {p_name}. Hãy:
-                                    1. Chỉ ra điểm yếu trong lập luận của đối thủ
-                                    2. Củng cố quan điểm của mình
-                                    3. Đưa ra thêm 1 ví dụ minh họa
-                                    (Dưới 100 từ, súc tích)
-                                    """
-                                
-                                try:
-                                    res = ai.generate(
-                                        p_prompt, 
-                                        model_type="flash",
-                                        system_instruction=DEBATE_PERSONAS[p_name]
-                                    )
-                                    
-                                    if res:
-                                        content_fmt = f"**{p_name}:** {res}"
-                                        st.session_state.weaver_chat.append({
-                                            "role": "assistant", 
-                                            "content": content_fmt
-                                        })
-                                        full_transcript.append(content_fmt)
-                                        
-                                        with st.chat_message("assistant"):
-                                            st.write(content_fmt)
-                                        
-                                        time.sleep(2)
-                                    
-                                except Exception as e:
-                                    st.error(f"⚠️ Lỗi khi gọi AI cho {p_name}: {str(e)}")
-                                    continue
-                        
-                        status.update(label="✅ Tranh luận kết thúc!", state="complete")
-                        
-                    except Exception as e:
-                        st.error(f"❌ Lỗi nghiêm trọng: {e}")
-                        status.update(label="❌ Tranh luận gặp lỗi", state="error")
+            st.divider()
+            for index, item in df_h.iloc[::-1].iterrows(): # Đảo ngược để xem mới nhất
+                # Dùng tên cột cũ để hiển thị
+                t = str(item.get('Time', ''))
+                tp = str(item.get('Type', ''))
+                ti = str(item.get('Title', ''))
+                ct = str(item.get('Content', ''))
                 
-                full_log = "\n\n".join(full_transcript)
+                icon = "📝"
+                if "Tranh Biện" in tp: icon = "🗣️"
+                elif "Dịch" in tp: icon = "✍️"
                 
-                # ✅ GỌI HÀM MỚI
-                luu_lich_su(
-                    loai="Hội Đồng Tranh Biện",
-                    tieu_de=f"Chủ đề: {topic}",
-                    noi_dung=full_log
+                with st.expander(f"{icon} {t} | {tp} | {ti}"):
+                    st.markdown(ct)
+        else:
+            st.info(T("t5_empty"))
