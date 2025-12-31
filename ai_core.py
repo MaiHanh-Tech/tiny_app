@@ -41,7 +41,7 @@ class AI_Core:
         valid_names = {
             "flash": "gemini-2.5-flash",         # Nhanh, rẻ
             "pro": "gemini-2.5-pro",             # Thông minh nhất (Dùng cho tranh biện)
-            "exp": "gemini-2.5-flash-latest"        # Bản thử nghiệm
+            "exp": "gemini-2.5-flash-exp"        # Bản thử nghiệm
         }
         
         # Mặc định fallback về 2.5 Flash nếu tên sai
@@ -71,13 +71,13 @@ class AI_Core:
             plan = [
                 ("pro", "Gemini 2.5 pro", 6), 
                 ("flash", "Gemini 2.5 Flash", 3), 
-                ("exp", "Gemini Flash Latest", 3)
+                ("exp", "Gemini 2.5 Flash exp", 3)
             ]
         else:
             # Với task thường: Ưu tiên Flash cho nhanh
             plan = [
                 ("flash", "Gemini 2.5 Flash", 2), 
-                ("exp", "Gemini Flash Latest", 2),
+                ("exp", "Gemini 2.5 Flash exp", 2),
                 ("pro", "Gemini 2.5 Pro", 6)
             ]
 
