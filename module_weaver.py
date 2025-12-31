@@ -204,42 +204,52 @@ def luu_lich_su(loai, tieu_de, noi_dung):
 
 def tai_lich_su():
     """Tải log từ Supabase và đổi tên cột cho khớp code cũ"""
-    if not has_db: return []
+    if not has_db: 
+        return []
     
     try:
         # Lấy 50 dòng mới nhất
         try:
-            response = supabase.table("History_Logs").select("*").order("created_at", desc=True).limit(50).execute()
-        except:
             response = supabase.table("history_logs").select("*").order("created_at", desc=True).limit(50).execute()
+        except:
+            response = supabase.table("History_Logs").select("*").order("created_at", desc=True).limit(50).execute()
             
         raw_data = response.data
         
+        if not raw_data:
+            return []
+        
         formatted_data = []
         for item in raw_data:
-            # Hàm lấy value bất kể key hoa/thường
-            def get_val(itm, keys, default=""):
+            # ✅ Hàm helper lấy value bất kể key hoa/thường
+            def get_val(keys, default=""):
+                """Lấy giá trị từ item theo danh sách keys"""
                 for k in keys:
-                    if k in itm and itm[k] is not None: return itminitm and itm[k] is not N default
+                    if k in item and item[k] is not None:
+                        return item[k]
+                return default
 
-            # Xử lý thời gian
-            raw_time = get_val(item, ["created_at", "Time", "time"])
-            clean_time = str(raw_time).replace("T", " ")[:19]
+            # ✅ Xử lý thời gian
+            raw_time = get_val(["created_at", "Time", "time"], "")
+            clean_time = str(raw_time).replace("T", " ")[:19] if raw_time else ""
 
+            # ✅ Format data theo cấu trúc cũ
             formatted_data.append({
                 "Time": clean_time,
-                "Type": get_val(item, ["type", "Type"]),
-                "Title": get_val(item, ["title", "Title"]),
-                "Content": get_val(item, ["content", "Content"]),
-                "User": get_val(item, ["user_name", "User", "user"]),
-                "SentimentScore": get_val(item, ["sentiment_score", "SentimentScore"], 0.0),
-                "SentimentLabel": get_val(item, ["sentiment_label", "SentimentLabel"], "Neutral")
+                "Type": get_val(["type", "Type"], ""),
+                "Title": get_val(["title", "Title"], ""),
+                "Content": get_val(["content", "Content"], ""),
+                "User": get_val(["user_name", "User", "user"], "Unknown"),
+                "SentimentScore": get_val(["sentiment_score", "SentimentScore"], 0.0),
+                "SentimentLabel": get_val(["sentiment_label", "SentimentLabel"], "Neutral")
             })
             
         return formatted_data
+        
     except Exception as e:
+        st.warning(f"⚠️ Không thể tải lịch sử: {str(e)[:100]}")
         return []
-
+        
 # --- HÀM CHÍNH: RUN() ---
 def run():
     ai = AI_Core()
