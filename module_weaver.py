@@ -367,31 +367,80 @@ def run():
         else:
             participants = st.multiselect("Chọn Hội Đồng:", list(DEBATE_PERSONAS.keys()), default=[list(DEBATE_PERSONAS.keys())[0], list(DEBATE_PERSONAS.keys())[1]], max_selections=3)
             topic = st.text_input("Chủ đề:", key="w_t3_topic")
-            if st.button("🔥 KHAI CHIẾN", disabled=(len(participants)<2 or not topic)):
+            
+            c_start, c_del = st.columns([1, 5])
+            with c_start:
+                start_btn = st.button("🔥 KHAI CHIẾN", disabled=(len(participants)<2 or not topic), type="primary")
+            with c_del:
+                if st.button("🗑️ Xóa Bàn"): st.session_state.weaver_chat = []; st.rerun()
+
+            for msg in st.session_state.weaver_chat:
+                role = msg["role"]
+                content = msg["content"]
+                if role == "system": st.info(content)
+                else: st.chat_message("assistant").write(content)
+
+            # ✅ LOGIC ĐƯỢC SỬA: Tăng thời gian, ép độ dài, gọi Pro
+            if start_btn and topic and len(participants) >= 2:
                 st.session_state.weaver_chat = []
                 start_msg = f"📢 **CHỦ TỌA:** Khai mạc tranh luận về: *'{topic}'*"
                 st.session_state.weaver_chat.append({"role": "system", "content": start_msg})
+                st.info(start_msg)
                 full_transcript = [start_msg]
-                MAX_TIME = 90; start_time = time.time()
-                with st.status("🔥 Cuộc chiến đang diễn ra...") as status:
-                    for round_num in range(1, 4):
-                        if time.time() - start_time > MAX_TIME: break
-                        for p_name in participants:
-                            if time.time() - start_time > MAX_TIME: break
-                            context_str = "\n".join([f"- {m['content']}" for m in st.session_state.weaver_chat[-3:] if m['role'] != 'system'])
-                            p_prompt = f"CHỦ ĐỀ: {topic}\nBỐI CẢNH:\n{context_str}\n\nNHIỆM VỤ (Vòng {round_num}): Phản biện."
-                            try:
-                                res = ai.generate(p_prompt, model_type="flash", system_instruction=DEBATE_PERSONAS[p_name])
-                                if res:
-                                    fmt = f"**{p_name}:** {res}"
-                                    st.session_state.weaver_chat.append({"role": "assistant", "content": fmt})
-                                    full_transcript.append(fmt)
-                                    st.chat_message("assistant").write(fmt)
-                                    time.sleep(2)
-                            except: continue
-                    status.update(label="Kết thúc!", state="complete")
-                luu_lich_su("Hội Đồng Tranh Biện", topic, "\n".join(full_transcript))
-
+                
+                # ✅ FIX 1: Tăng thời gian lên 600s
+                MAX_DEBATE_TIME = 600 
+                start_time = time.time()
+                
+                with st.status("🔥 Cuộc chiến đang diễn ra (3 vòng)...") as status:
+                    try:
+                        for round_num in range(1, 4):
+                            if time.time() - start_time > MAX_DEBATE_TIME:
+                                st.warning("⏰ Hết giờ!")
+                                break
+                            
+                            status.update(label=f"🔄 Vòng {round_num}/3 đang diễn ra...")
+                            
+                            for i, p_name in enumerate(participants):
+                                if time.time() - start_time > MAX_DEBATE_TIME: break
+                                
+                                context_str = topic
+                                if len(st.session_state.weaver_chat) > 1:
+                                    recent_msgs = st.session_state.weaver_chat[-4:]
+                                    context_str = "\n".join([f"{m['role']}: {m['content']}" for m in recent_msgs])
+                                
+                                # ✅ FIX 2: Ép độ dài 200-300 từ
+                                length_instruction = " (BẮT BUỘC: Trả lời ngắn gọn khoảng 200-300 từ. Đi thẳng vào trọng tâm.)"
+                                
+                                if round_num == 1:
+                                    p_prompt = f"CHỦ ĐỀ: {topic}\nNHIỆM VỤ (Vòng 1): Nêu quan điểm mở đầu. {length_instruction}"
+                                else:
+                                    p_prompt = f"CHỦ ĐỀ: {topic}\nBỐI CẢNH MỚI NHẤT:\n{context_str}\n\nNHIỆM VỤ (Vòng {round_num}): Phản biện sắc bén. {length_instruction}"
+                                
+                                try:
+                                    # ✅ FIX 3: Dùng model_type="pro" để gọi Gemini Pro (3.0/1.5)
+                                    res = ai.generate(
+                                        p_prompt, 
+                                        model_type="pro", 
+                                        system_instruction=DEBATE_PERSONAS[p_name]
+                                    )
+                                    
+                                    if res:
+                                        fmt = f"**{p_name}:** {res}"
+                                        st.session_state.weaver_chat.append({"role": "assistant", "content": fmt})
+                                        full_transcript.append(fmt)
+                                        st.chat_message("assistant").write(fmt)
+                                        time.sleep(1)
+                                except Exception as e:
+                                    st.error(f"Lỗi {p_name}: {e}")
+                                    continue
+                        status.update(label="✅ Tranh luận kết thúc!", state="complete")
+                    except Exception as e:
+                        st.error(f"Lỗi luồng: {e}")
+                
+                full_log = "\n\n".join(full_transcript)
+                luu_lich_su("Hội Đồng Tranh Biện", f"Chủ đề: {topic}", full_log)
+                
     # === TAB 4: PHÒNG THU ===
     with tab4:
         st.subheader(T("t4_header"))
